@@ -460,6 +460,31 @@ static void check_tmp_path(void)
 	closedir(dir);
 }
 
+static int check_image_path(void)
+{
+	const char *path = imagepath();
+	int ret;
+	DIR *dir;
+
+	if (!path) {
+		error("imagepath not set. aborting\n");
+		return -EINVAL;
+	}
+
+	dir = opendir(path);
+	if (dir) {
+		closedir(dir);
+		return 0;
+	}
+
+	ret = systemp(NULL, "mkdir -p %s", imagepath());
+	if (ret)
+		ret=-ret;
+
+	closedir(dir);
+	return ret;
+}
+
 static void cleanup(void)
 {
 	if (tmppath_generated)
@@ -673,7 +698,7 @@ int main(int argc, char *argv[])
 	if (ret)
 		goto cleanup;
 
-	ret = systemp(NULL, "mkdir -p %s", imagepath());
+	ret = check_image_path();
 	if (ret)
 		goto cleanup;
 
