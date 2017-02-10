@@ -337,6 +337,11 @@ static struct config opts[] = {
 		.env = "GENIMAGE_UBINIZE",
 		.def = "ubinize",
 	}, {
+		.name = "debugfs",
+		.opt = CFG_STR("debugfs", NULL, CFGF_NONE),
+		.env = "GENIMAGE_DEBUGFS",
+		.def = "debugfs",
+	}, {
 		.name = "config",
 		.env = "GENIMAGE_CONFIG",
 		.def = "genimage.cfg",

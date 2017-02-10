@@ -25,6 +25,7 @@
 static int ext2_generate(struct image *image)
 {
 	int ret;
+        struct partition *part;
 	char *extraargs = cfg_getstr(image->imagesec, "extraargs");
 	char *features = cfg_getstr(image->imagesec, "features");
 	char *label = cfg_getstr(image->imagesec, "label");
@@ -49,6 +50,33 @@ static int ext2_generate(struct image *image)
 		if (ret)
 			return ret;
 	}
+
+        list_for_each_entry(part, &image->partitions, list) {
+                struct image *child = image_get(part->image);
+                const char *file = imageoutfile(child);
+                const char *target = part->name;
+                char *path = strdupa(target);
+                char *next = path;
+
+                while ((next = strchr(next, '/')) != NULL) {
+                        *next = '\0';
+                        systemp(image, "%s -DsS -i %s ::%s",
+                                get_opt("mkdir"), imageoutfile(image), path);
+                        *next = '/';
+                        ++next;
+                }
+
+                image_log(image, 1, "adding file '%s' as '%s' ...\n",
+                                child->file, *target ? target : child->file);
+                image_log(image, 1, "%s -w %s -R \"write %s %s\"\n",
+                                get_opt("debugfs"), imageoutfile(image), file, target);
+                ret = systemp(image, "%s -w %s -R \"write %s %s\"",
+                                get_opt("debugfs"), imageoutfile(image), file, target);
+                if (ret)
+                        return ret;
+        }
+        if (!list_empty(&image->partitions))
+                return 0;
 
 	ret = systemp(image, "%s -pvfD %s", get_opt("e2fsck"),
 			imageoutfile(image));
