@@ -19,8 +19,102 @@
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <unistd.h>
+#include <ftw.h>
+
+/* POSIX.1 says each process has at least 20 file descriptors.
+ * Three of those belong to the standard streams.
+ * Here, we use a conservative estimate of 15 available;
+ * assuming we use at most two for other uses in this program,
+ * we should never run into any problems.
+ * Most trees are shallower than that, so it is efficient.
+ * Deeper trees are traversed fine, just a bit slower.
+ * (Linux allows typically hundreds to thousands of open files,
+ *  so you'll probably never see any issues even if you used
+ *  a much higher value, say a couple of hundred, but
+ *  15 is a safe, reasonable value.)
+*/
+#ifndef USE_FDS
+#define USE_FDS 15
+#endif
 
 #include "genimage.h"
+
+static int add_directory(const char *const dirpath, struct image *image, struct image *child, const char *target, const char *file)
+{
+    int result;
+
+    int add_file(const char *filepath, const struct stat *info,
+                    const int typeflag, struct FTW *pathinfo)
+    {
+        int ret = 0;
+
+        if (typeflag == FTW_SL) {
+            char   *file_target;
+            size_t  maxlen = 1023;
+            ssize_t len;
+
+            while (1) {
+
+                file_target = malloc(maxlen + 1);
+                if (file_target == NULL)
+                    return ENOMEM;
+
+                len = readlink(filepath, file_target, maxlen);
+                if (len == (ssize_t)-1) {
+                    const int saved_errno = errno;
+                    free(file_target);
+                    return saved_errno;
+                }
+                if (len >= (ssize_t)maxlen) {
+                    free(file_target);
+                    maxlen += 1024;
+                    continue;
+                }
+
+                file_target[len] = '\0';
+                break;
+            }
+
+            printf(" %s -> %s\n", filepath, file_target);
+            free(file_target);
+
+        } else
+        if (typeflag == FTW_SLN)
+            printf("WARNING: NOT adding %s (dangling symlink)\n", filepath);
+        else
+        if (typeflag == FTW_F) {
+            image_log(image, 1, "Adding file '%s' as '%s' ...\n",
+                            child->file, *target ? target : child->file);
+            image_log(image, 1, "%s -w %s -R \"write %s %s\"\n",
+                            get_opt("debugfs"), imageoutfile(image), file, target);
+            ret = systemp(image, "%s -w %s -R \"write %s %s\"",
+                            get_opt("debugfs"), imageoutfile(image), file, target);
+            printf(" %s\n", filepath);
+        } else
+        if (typeflag == FTW_D || typeflag == FTW_DP)
+            printf(" %s/\n", filepath);
+        else
+        if (typeflag == FTW_DNR)
+            printf("WARNING: NOT adding %s/ (unreadable)\n", filepath);
+        else
+            printf("WARNING: NOT adding %s (unknown)\n", filepath);
+
+        return ret;
+    }
+
+
+
+    /* Invalid directory path? */
+    if (dirpath == NULL || *dirpath == '\0')
+        return errno = EINVAL;
+
+    result = nftw(dirpath, add_file, USE_FDS, FTW_PHYS);
+    if (result >= 0)
+        errno = result;
+
+    return errno;
+}
 
 static int ext2_generate(struct image *image)
 {
@@ -66,12 +160,10 @@ static int ext2_generate(struct image *image)
                         ++next;
                 }
 
-                image_log(image, 1, "adding file '%s' as '%s' ...\n",
-                                child->file, *target ? target : child->file);
-                image_log(image, 1, "%s -w %s -R \"write %s %s\"\n",
-                                get_opt("debugfs"), imageoutfile(image), file, target);
-                ret = systemp(image, "%s -w %s -R \"write %s %s\"",
-                                get_opt("debugfs"), imageoutfile(image), file, target);
+                struct stat *fileinfo = NULL;
+                stat(file, fileinfo);
+                if (fileinfo->st_mode == S_IFDIR)
+                    add_directory(file,image,child,target,file);
                 if (ret)
                         return ret;
         }
