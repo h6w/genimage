@@ -124,6 +124,7 @@ static int ext2_generate(struct image *image)
 	char *features = cfg_getstr(image->imagesec, "features");
 	char *label = cfg_getstr(image->imagesec, "label");
 
+	image_log(image, 1, "Generating ext2 image...\n");
 	ret = systemp(image, "%s -d %s --size-in-blocks=%lld -i 16384 %s %s",
 			get_opt("genext2fs"),
 			mountpath(image), image->size / 1024, imageoutfile(image),
@@ -133,12 +134,16 @@ static int ext2_generate(struct image *image)
 		return ret;
 
 	if (features && features[0] != '\0') {
+		image_log(image, 1, "%s -O \"%s\" %s\n", get_opt("tune2fs"),
+				features, imageoutfile(image));
 		ret = systemp(image, "%s -O \"%s\" %s", get_opt("tune2fs"),
 				features, imageoutfile(image));
 		if (ret)
 			return ret;
 	}
 	if (label && label[0] != '\0') {
+		image_log(image, 1, "%s -L \"%s\" %s\n", get_opt("tune2fs"),
+				label, imageoutfile(image));
 		ret = systemp(image, "%s -L \"%s\" %s", get_opt("tune2fs"),
 				label, imageoutfile(image));
 		if (ret)
@@ -146,24 +151,35 @@ static int ext2_generate(struct image *image)
 	}
 
         list_for_each_entry(part, &image->partitions, list) {
+		image_log(image, 1, "Entry start:\n");
                 struct image *child = image_get(part->image);
                 const char *file = imageoutfile(child);
                 const char *target = part->name;
                 char *path = strdupa(target);
                 char *next = path;
 
+		image_log(image, 1, "Entry: File:%s Target:%s Path:%s Next:%s\n",
+				file, target, path, next);
+
                 while ((next = strchr(next, '/')) != NULL) {
+		        image_log(image, 1, "Next:%s\n", next);
                         *next = '\0';
                         systemp(image, "%s -DsS -i %s ::%s",
                                 get_opt("mkdir"), imageoutfile(image), path);
                         *next = '/';
                         ++next;
                 }
+		image_log(image, 1, "Parent directory exists\n");
 
-                struct stat *fileinfo = NULL;
-                stat(file, fileinfo);
-                if (fileinfo->st_mode == S_IFDIR)
+                struct stat fileinfo;
+                if (stat(file, &fileinfo) != 0)
+		    image_log(image, 1, "Stat failed.\n");
+                if (fileinfo.st_mode == S_IFDIR) {
+		    image_log(image, 1, "It's a directory.\n");
                     add_directory(file,image,child,target,file);
+                } else {
+		    image_log(image, 1, "It's a file.\n");
+                }
                 if (ret)
                         return ret;
         }
