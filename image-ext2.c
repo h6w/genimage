@@ -184,41 +184,41 @@ static int ext2_generate(struct image *image)
 			return ret;
 	}
 
-        list_for_each_entry(part, &image->partitions, list) {
-		image_log(image, 1, "Entry start:\n");
-                struct image *child = image_get(part->image);
-                const char *file = imageoutfile(child);
-                const char *target = part->name;
-                char *path = strdupa(target);
-                char *next = path;
+    list_for_each_entry(part, &image->partitions, list) {
+	        image_log(image, 1, "Entry start:\n");
+            struct image *child = image_get(part->image);
+            const char *file = imageoutfile(child);
+            const char *target = part->name;
+            char *path = strdupa(target);
+            char *next = path;
 
-		image_log(image, 1, "Entry: File:%s Target:%s Path:%s Next:%s\n",
-				file, target, path, next);
+	        image_log(image, 1, "Entry: File:%s Target:%s Path:%s Next:%s\n",
+			file, target, path, next);
 
-                while ((next = strchr(next, '/')) != NULL) {
-		        image_log(image, 1, "Next:%s\n", next);
-                        *next = '\0';
-                        systemp(image, "%s -DsS -i %s ::%s",
-                                get_opt("mkdir"), imageoutfile(image), path);
-                        *next = '/';
-                        ++next;
-                }
-		image_log(image, 1, "Parent directory exists\n");
+            while ((next = strchr(next, '/')) != NULL) {
+	                image_log(image, 1, "Next:%s\n", next);
+                    *next = '\0';
+                    systemp(image, "%s -DsS -i %s ::%s",
+                            get_opt("mkdir"), imageoutfile(image), path);
+                    *next = '/';
+                    ++next;
+            }
+	        image_log(image, 1, "Parent directory exists\n");
 
-                struct stat fileinfo;
-                if (stat(file, &fileinfo) != 0)
-		    image_log(image, 1, "Stat failed.\n");
-                if (fileinfo.st_mode == S_IFDIR) {
-		    image_log(image, 1, "It's a directory.\n");
-                    add_directory(file,image,child,target,file);
-                } else {
-		    image_log(image, 1, "It's a file.\n");
-                }
-                if (ret)
-                        return ret;
-        }
-        if (!list_empty(&image->partitions))
-                return 0;
+            struct stat fileinfo;
+            if (stat(file, &fileinfo) != 0)
+	            image_log(image, 1, "Stat failed.\n");
+            if (S_ISDIR(fileinfo.st_mode)) {
+	            image_log(image, 1, "It's a directory.\n");
+                add_directory(file,image,child,target,file);
+            } else {
+	            image_log(image, 1, "It's a file.\n");
+            }
+            if (ret)
+                    return ret;
+    }
+    if (!list_empty(&image->partitions))
+            return 0;
 
 	ret = systemp(image, "%s -pvfD %s", get_opt("e2fsck"),
 			imageoutfile(image));
