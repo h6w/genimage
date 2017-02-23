@@ -136,6 +136,38 @@ int systemp(struct image *image, const char *fmt, ...)
 }
 
 /*
+ * printf wrapper around 'popen'
+ */
+FILE *popenp(struct image *image, const char *mode, const char *fmt, ...)
+{
+	va_list args;
+	char *buf;
+	FILE *ret;
+
+	va_start (args, fmt);
+
+	vasprintf(&buf, fmt, args);
+
+	va_end (args);
+
+	if (!buf)
+		return NULL;
+
+	if (image)
+		image_log(image, 2, "cmd: %s\n", buf);
+	else
+		logmsg(2, "cmd: %s\n", buf);
+
+	ret = popen(buf, mode);
+
+//	if (ret == NULL)
+//		ret = errno;
+
+	return ret;
+}
+
+
+/*
  * xzalloc - safely allocate zeroed memory
  */
 void *xzalloc(size_t n)

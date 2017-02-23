@@ -40,14 +40,48 @@
 
 #include "genimage.h"
 
-static int add_directory(const char *const dirpath, struct image *image, struct image *child, const char *target, const char *file)
+void split_path_file(char** p, char** f, const char *pf) {
+    const char *slash = pf, *next;
+    while ((next = strpbrk(slash + 1, "\\/"))) slash = next;
+    if (pf != slash) slash++;
+    *p = strndup(pf, slash - pf);
+    *f = strdup(slash);
+}
+
+static int verify_directory_exists(FILE *pipe, char *dirpath, struct image *image) {
+    char *p;
+    char *tmp;
+    int ret = 0;
+    while (*p != '\0') {
+        if (*p == '/' && p-dirpath > 0) {
+           tmp = strndup(dirpath, p-dirpath);
+           image_log(image, 1, "debugfs[%s]: mkdir %s\n",
+                            imageoutfile(image), tmp);
+           ret = fprintf(pipe, "mkdir %s\n",tmp);
+        }
+        p++;
+    }
+    return ret;
+}
+
+static int add_directory(const char *dirpath, struct image *image, struct image *child, const char *target, const char *file)
 {
     int result;
+    FILE *debugfspipe;
+
+    debugfspipe = popenp(image, "%s -w %s","w",
+                      get_opt("debugfs"), imageoutfile(image));
 
     int add_file(const char *filepath, const struct stat *info,
                     const int typeflag, struct FTW *pathinfo)
     {
         int ret = 0;
+        char *target_path;
+        char *target_file;
+
+        split_path_file(&target_path, &target_file, filepath);
+
+        verify_directory_exists(debugfspipe, target_path, image);
 
         if (typeflag == FTW_SL) {
             char   *file_target;
@@ -86,10 +120,10 @@ static int add_directory(const char *const dirpath, struct image *image, struct 
         if (typeflag == FTW_F) {
             image_log(image, 1, "Adding file '%s' as '%s' ...\n",
                             child->file, *target ? target : child->file);
-            image_log(image, 1, "%s -w %s -R \"write %s %s\"\n",
-                            get_opt("debugfs"), imageoutfile(image), file, target);
-            ret = systemp(image, "%s -w %s -R \"write %s %s\"",
-                            get_opt("debugfs"), imageoutfile(image), file, target);
+            image_log(image, 1, "debugfs[%s]: write %s %s\n",
+                            imageoutfile(image), file, target);
+            ret = fprintf(debugfspipe, "write %s %s\n",
+                            file, target);
             printf(" %s\n", filepath);
         } else
         if (typeflag == FTW_D || typeflag == FTW_DP)

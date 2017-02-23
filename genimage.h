@@ -7,6 +7,11 @@ struct image_handler;
 
 struct image *image_get(const char *filename);
 
+void split_path_file(char** p, char** f, const char *pf);
+
+//int verify_directory_exists(FILE *pipe, const char *dirpath, struct image *image);
+
+FILE *popenp(struct image *image, const char *mode, const char *fmt, ...);
 int systemp(struct image *image, const char *fmt, ...) __attribute__ ((format(printf, 2, 3)));
 void error(const char *fmt, ...) __attribute__ ((format(printf, 1, 2)));
 void logmsg(int level, const char *fmt, ...) __attribute__ ((format(printf, 2, 3)));
