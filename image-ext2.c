@@ -51,7 +51,6 @@ void split_path_file(char** p, char** f, const char *pf) {
 static int verify_directory_exists(FILE *debugfspipe, char *dirpath, struct image *image) {
     char *p;
     char *tmp;
-    char *action = "mkdir";
     int ret = 0;
     p = dirpath;
     while (*p != '\0') {
@@ -81,21 +80,6 @@ static int add_directory(const char *dirpath, struct image *image, struct image 
                     const int typeflag, struct FTW *pathinfo)
     {
         int ret = 0;
-        char *target_path;
-        char *target_file;
-
-        image_log(image, 1, "debugfs[%s]:Adding file %s\n",
-                            imageoutfile(image), filepath);
-
-        split_path_file(&target_path, &target_file, filepath);
-
-        image_log(image, 1, "debugfs[%s]:Verifying parent directory %s...\n",
-                            imageoutfile(image), target_path);
-
-        verify_directory_exists(debugfspipe, target_path, image);
-
-        image_log(image, 1, "debugfs[%s]:Parent directory %s exists\n",
-                            imageoutfile(image), target_path);
 
         if (typeflag == FTW_SL) {
             char   *file_target;
@@ -132,8 +116,22 @@ static int add_directory(const char *dirpath, struct image *image, struct image 
             printf("WARNING: NOT adding %s (dangling symlink)\n", filepath);
         else
         if (typeflag == FTW_F) {
+            char *target_path;
+            char *target_file;
+
             image_log(image, 1, "Adding file '%s' as '%s' ...\n",
                             child->file, *target ? target : child->file);
+
+            split_path_file(&target_path, &target_file, filepath);
+
+            image_log(image, 1, "debugfs[%s]:Verifying parent directory %s...\n",
+                                imageoutfile(image), target_path);
+
+            verify_directory_exists(debugfspipe, target_path, image);
+
+            image_log(image, 1, "debugfs[%s]:Parent directory %s exists\n",
+                                imageoutfile(image), target_path);
+
             image_log(image, 1, "debugfs[%s]: cd %s\n",
                             imageoutfile(image), target_path);
             ret = fprintf(debugfspipe, "cd %s\n", target_path);
