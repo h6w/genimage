@@ -140,14 +140,18 @@ static int add_directory(const char *dirpath, struct image *image, struct image 
             ret = fprintf(debugfspipe, "write %s %s\n",
                             filepath, target_file);
             printf(" %s\n", filepath);
-        } else
-        if (typeflag == FTW_D || typeflag == FTW_DP)
-            printf(" %s/\n", filepath);
-        else
-        if (typeflag == FTW_DNR)
+            ret = 0;
+        } else if (typeflag == FTW_D || typeflag == FTW_DP) {
+            image_log(image, 1, "debugfs[%s]: DIRECTORY UNHANDLED %s\n",
+                            imageoutfile(image), filepath);
+            ret = 0;
+        } else if (typeflag == FTW_DNR) {
             printf("WARNING: NOT adding %s/ (unreadable)\n", filepath);
-        else
+            ret = 0;
+        } else {
             printf("WARNING: NOT adding %s (unknown)\n", filepath);
+            ret = 0;
+        }
 
         return ret;
     }
