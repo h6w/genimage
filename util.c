@@ -160,7 +160,8 @@ FILE *popenp(struct image *image, const char *mode, const char *fmt, ...)
 
 	ret = popen(buf, mode);
 
-//	if (ret == NULL)
+	if (ret == NULL)
+		image_log(image, 1, "PROCESS OPEN FAILED!! cmd: %s\n", buf);
 //		ret = errno;
 
 	return ret;

@@ -48,16 +48,18 @@ void split_path_file(char** p, char** f, const char *pf) {
     *f = strdup(slash);
 }
 
-static int verify_directory_exists(FILE *pipe, char *dirpath, struct image *image) {
+static int verify_directory_exists(FILE *debugfspipe, char *dirpath, struct image *image) {
     char *p;
     char *tmp;
+    char *action = "mkdir";
     int ret = 0;
+    p = dirpath;
     while (*p != '\0') {
         if (*p == '/' && p-dirpath > 0) {
            tmp = strndup(dirpath, p-dirpath);
            image_log(image, 1, "debugfs[%s]: mkdir %s\n",
                             imageoutfile(image), tmp);
-           ret = fprintf(pipe, "mkdir %s\n",tmp);
+           ret = fprintf(debugfspipe, "mkdir %s\n",tmp);
         }
         p++;
     }
@@ -69,8 +71,11 @@ static int add_directory(const char *dirpath, struct image *image, struct image 
     int result;
     FILE *debugfspipe;
 
-    debugfspipe = popenp(image, "%s -w %s","w",
+    image_log(image, 1, "Opening connection to debugfs[%s]...",
+                            imageoutfile(image));
+    debugfspipe = popenp(image, "w", "%s -w %s",
                       get_opt("debugfs"), imageoutfile(image));
+    image_log(image, 1, "open\n");
 
     int add_file(const char *filepath, const struct stat *info,
                     const int typeflag, struct FTW *pathinfo)
@@ -79,9 +84,18 @@ static int add_directory(const char *dirpath, struct image *image, struct image 
         char *target_path;
         char *target_file;
 
+        image_log(image, 1, "debugfs[%s]:Adding file %s\n",
+                            imageoutfile(image), filepath);
+
         split_path_file(&target_path, &target_file, filepath);
 
+        image_log(image, 1, "debugfs[%s]:Verifying parent directory %s...\n",
+                            imageoutfile(image), target_path);
+
         verify_directory_exists(debugfspipe, target_path, image);
+
+        image_log(image, 1, "debugfs[%s]:Parent directory %s exists\n",
+                            imageoutfile(image), target_path);
 
         if (typeflag == FTW_SL) {
             char   *file_target;
@@ -120,10 +134,13 @@ static int add_directory(const char *dirpath, struct image *image, struct image 
         if (typeflag == FTW_F) {
             image_log(image, 1, "Adding file '%s' as '%s' ...\n",
                             child->file, *target ? target : child->file);
+            image_log(image, 1, "debugfs[%s]: cd %s\n",
+                            imageoutfile(image), target_path);
+            ret = fprintf(debugfspipe, "cd %s\n", target_path);
             image_log(image, 1, "debugfs[%s]: write %s %s\n",
-                            imageoutfile(image), file, target);
+                            imageoutfile(image), filepath, target_file);
             ret = fprintf(debugfspipe, "write %s %s\n",
-                            file, target);
+                            filepath, target_file);
             printf(" %s\n", filepath);
         } else
         if (typeflag == FTW_D || typeflag == FTW_DP)
@@ -146,6 +163,10 @@ static int add_directory(const char *dirpath, struct image *image, struct image 
     result = nftw(dirpath, add_file, USE_FDS, FTW_PHYS);
     if (result >= 0)
         errno = result;
+
+    fprintf(debugfspipe, "quit\n");
+
+    pclose(debugfspipe);
 
     return errno;
 }
