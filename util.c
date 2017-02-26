@@ -135,6 +135,40 @@ int systemp(struct image *image, const char *fmt, ...)
 	return ret;
 }
 
+
+
+/*
+ * bidirectional process communication
+ */
+int popenbd(const char *cmdline, struct bdpipe *pipeinfo) {
+    pid_t p;
+    int parent_child[2], child_parent[2];  // 0 - read end of pipe, 1 - write end of pipe
+
+
+    if (pipe(parent_child))
+        return -1;
+    if (pipe(child_parent))
+        return -1;
+
+    p = fork();
+
+    if(p < 0) return p;
+
+    if(p == 0) {
+        close(parent_child[1]);     //Close the write end of the parent->child pipe, because that's not us.
+        close(child_parent[0]);     //Close the read end of the child->parent pipe, because we're not listening to the parent.
+        dup2(parent_child[0], 0);   //Replace our stdin (0) with the readable end of the parent->child pipe
+        dup2(child_parent[1], 1);   //Replace our stdout (1) to the writable end of the child->parent pipe
+        execl("/bin/sh", "sh", "-c", cmdline, (char *)0);
+        perror("execl"); exit(99);
+    }
+
+    pipeinfo->pid = p;
+    pipeinfo->write = fdopen(parent_child[1],"w");
+    pipeinfo->read = fdopen(child_parent[0],"r");
+    return 0;
+}
+
 /*
  * printf wrapper around 'popen'
  */
@@ -167,6 +201,38 @@ FILE *popenp(struct image *image, const char *mode, const char *fmt, ...)
 	return ret;
 }
 
+/*
+ * printf wrapper around 'popenbd'
+ */
+struct bdpipe *popenbdp(struct image *image, const char *mode, const char *fmt, ...)
+{
+	va_list args;
+	char *buf;
+	struct bdpipe *pipe = malloc(sizeof *pipe);
+    int ret = 0;
+
+	va_start (args, fmt);
+
+	vasprintf(&buf, fmt, args);
+
+	va_end (args);
+
+	if (!buf)
+		return NULL;
+
+	if (image)
+		image_log(image, 2, "cmd: %s\n", buf);
+	else
+		logmsg(2, "cmd: %s\n", buf);
+
+	ret = popenbd(buf, pipe);
+
+	if (ret < 0)
+		image_log(image, 1, "PROCESS OPEN FAILED!! cmd: %s\n", buf);
+//		ret = errno;
+
+	return pipe;
+}
 
 /*
  * xzalloc - safely allocate zeroed memory

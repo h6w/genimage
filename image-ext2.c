@@ -48,7 +48,7 @@ void split_path_file(char** p, char** f, const char *pf) {
     *f = strdup(slash);
 }
 
-static int verify_directory_exists(FILE *debugfspipe, char *dirpath, struct image *image) {
+static int verify_directory_exists(struct bdpipe *debugfspipe, char *dirpath, struct image *image) {
     char *p;
     char *tmp;
     int ret = 0;
@@ -58,7 +58,7 @@ static int verify_directory_exists(FILE *debugfspipe, char *dirpath, struct imag
            tmp = strndup(dirpath, p-dirpath);
            image_log(image, 1, "debugfs[%s]: mkdir %s\n",
                             imageoutfile(image), tmp);
-           ret = fprintf(debugfspipe, "mkdir %s\n",tmp);
+           ret = fprintf(debugfspipe->write, "mkdir %s\n",tmp);
         }
         p++;
     }
@@ -68,11 +68,11 @@ static int verify_directory_exists(FILE *debugfspipe, char *dirpath, struct imag
 static int add_directory(const char *dirpath, struct image *image, struct image *child, const char *target, const char *file)
 {
     int result;
-    FILE *debugfspipe;
+    struct bdpipe *debugfspipe;
 
     image_log(image, 1, "Opening connection to debugfs[%s]...",
                             imageoutfile(image));
-    debugfspipe = popenp(image, "w", "%s -w %s",
+    debugfspipe = popenbdp(image, "w", "%s -w %s",
                       get_opt("debugfs"), imageoutfile(image));
     image_log(image, 1, "open\n");
 
@@ -134,10 +134,10 @@ static int add_directory(const char *dirpath, struct image *image, struct image 
 
             image_log(image, 1, "debugfs[%s]: cd %s\n",
                             imageoutfile(image), target_path);
-            ret = fprintf(debugfspipe, "cd %s\n", target_path);
+            ret = fprintf(debugfspipe->write, "cd %s\n", target_path);
             image_log(image, 1, "debugfs[%s]: write %s %s\n",
                             imageoutfile(image), filepath, target_file);
-            ret = fprintf(debugfspipe, "write %s %s\n",
+            ret = fprintf(debugfspipe->write, "write %s %s\n",
                             filepath, target_file);
             printf(" %s\n", filepath);
             ret = 0;
@@ -166,9 +166,7 @@ static int add_directory(const char *dirpath, struct image *image, struct image 
     if (result >= 0)
         errno = result;
 
-    fprintf(debugfspipe, "quit\n");
-
-    pclose(debugfspipe);
+    fprintf(debugfspipe->write, "quit\n");
 
     return errno;
 }
