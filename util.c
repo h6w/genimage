@@ -208,7 +208,7 @@ struct bdpipe *popenbdp(struct image *image, const char *mode, const char *fmt, 
 {
 	va_list args;
 	char *buf;
-	struct bdpipe *pipe = malloc(sizeof *pipe);
+	struct bdpipe *p = malloc(sizeof *p);
     int ret = 0;
 
 	va_start (args, fmt);
@@ -225,13 +225,13 @@ struct bdpipe *popenbdp(struct image *image, const char *mode, const char *fmt, 
 	else
 		logmsg(2, "cmd: %s\n", buf);
 
-	ret = popenbd(buf, pipe);
+	ret = popenbd(buf, p);
 
 	if (ret < 0)
 		image_log(image, 1, "PROCESS OPEN FAILED!! cmd: %s\n", buf);
 //		ret = errno;
 
-	return pipe;
+	return p;
 }
 
 /*
