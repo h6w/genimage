@@ -40,7 +40,7 @@
 
 #include "genimage.h"
 
-#define DEBUGFS_PROMPT "debugfs:"
+#define DEBUGFS_PROMPT "debugfs: "
 
 void split_path_file(char** p, char** f, const char *pf) {
     const char *slash = pf, *next;
@@ -54,9 +54,17 @@ static int readuntil(struct image *image, FILE *stream, char *expected) {
     char *p;
     char ch;
     p = expected;
-    while(p != '\0') {
+    char buf[255];
+    char *bufp = buf;
+    while(*p != '\0') {
         ch = fgetc(stream);
-        image_log(image, 1, "%c", ch);
+        *bufp = ch;
+        bufp++;
+        if (ch == '\n' || *p == '\0') {
+            *bufp='\0';
+            image_log(image, 1, "%s", buf);
+            bufp=buf;
+        }
         if (*p == ch) p++;
         else p = expected;
     }
@@ -91,6 +99,7 @@ static int add_directory(const char *dirpath, struct image *image, struct image 
     debugfspipe = popenbdp(image, "w", "%s -w %s",
                       get_opt("debugfs"), imageoutfile(image));
     image_log(image, 1, "open\n");
+    readuntil(image,debugfspipe->read,DEBUGFS_PROMPT);
 
     int add_file(const char *filepath, const struct stat *info,
                     const int typeflag, struct FTW *pathinfo)
