@@ -40,12 +40,23 @@
 
 #include "genimage.h"
 
+#define BUFFERSIZE 255
+
 void split_path_file(char** p, char** f, const char *pf) {
     const char *slash = pf, *next;
     while ((next = strpbrk(slash + 1, "\\/"))) slash = next;
     if (pf != slash) slash++;
     *p = strndup(pf, slash - pf);
     *f = strdup(slash);
+}
+
+static int printpipe(struct image *image, FILE *stream) {
+    char buffer[BUFFERSIZE];
+    while(fgets(buffer, BUFFERSIZE , stream) != NULL)
+    {
+        image_log(image, 1, "%s\n", buffer);
+    }
+    return 0;
 }
 
 static int verify_directory_exists(struct bdpipe *debugfspipe, char *dirpath, struct image *image) {
@@ -59,6 +70,7 @@ static int verify_directory_exists(struct bdpipe *debugfspipe, char *dirpath, st
            image_log(image, 1, "debugfs[%s]: mkdir %s\n",
                             imageoutfile(image), tmp);
            ret = fprintf(debugfspipe->write, "mkdir %s\n",tmp);
+           printpipe(image, debugfspipe->read);
         }
         p++;
     }
@@ -135,10 +147,12 @@ static int add_directory(const char *dirpath, struct image *image, struct image 
             image_log(image, 1, "debugfs[%s]: cd %s\n",
                             imageoutfile(image), target_path);
             ret = fprintf(debugfspipe->write, "cd %s\n", target_path);
+            printpipe(image,debugfspipe->read);
             image_log(image, 1, "debugfs[%s]: write %s %s\n",
                             imageoutfile(image), filepath, target_file);
             ret = fprintf(debugfspipe->write, "write %s %s\n",
                             filepath, target_file);
+            printpipe(image,debugfspipe->read);
             printf(" %s\n", filepath);
             ret = 0;
         } else if (typeflag == FTW_D || typeflag == FTW_DP) {
@@ -167,6 +181,7 @@ static int add_directory(const char *dirpath, struct image *image, struct image 
         errno = result;
 
     fprintf(debugfspipe->write, "quit\n");
+    printpipe(image,debugfspipe->read);
 
     return errno;
 }
