@@ -60,7 +60,7 @@ static int readuntil(struct image *image, FILE *stream, char *expected) {
         ch = fgetc(stream);
         *bufp = ch;
         bufp++;
-        if (ch == '\n' || *p == '\0') {
+        if (ch == '\n') {
             *bufp='\0';
             image_log(image, 1, "%s", buf);
             bufp=buf;
@@ -68,6 +68,12 @@ static int readuntil(struct image *image, FILE *stream, char *expected) {
         if (*p == ch) p++;
         else p = expected;
     }
+    if (*p == '\0') {
+        *bufp = '\n';
+        bufp++;
+    }
+    *bufp='\0';
+    image_log(image, 1, "%s", buf);
     return 0;
 }
 
