@@ -179,7 +179,7 @@ static int add_directory(const char *dirpath, struct image *image, struct image 
             image_log(image, 1, "Adding file '%s' as '%s' ...\n",
                             filepath, target_filepath);
 
-            split_path_file(&target_path, &target_file, filepath);
+            split_path_file(&target_path, &target_file, target_filepath);
 
             image_log(image, 1, "debugfs[%s]:Verifying parent directory %s...\n",
                                 imageoutfile(image), target_path);
