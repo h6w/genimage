@@ -12,7 +12,7 @@ void split_path_file(char** p, char** f, const char *pf);
 //int verify_directory_exists(FILE *pipe, const char *dirpath, struct image *image);
 struct bdpipe {
     pid_t pid;
-    FILE *write, *read;
+    int write, read;
 };
 
 int popenbd(const char *cmdline, struct bdpipe *pipe);

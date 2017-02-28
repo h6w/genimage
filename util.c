@@ -164,8 +164,8 @@ int popenbd(const char *cmdline, struct bdpipe *pipeinfo) {
     }
 
     pipeinfo->pid = p;
-    pipeinfo->write = fdopen(parent_child[1],"w");
-    pipeinfo->read = fdopen(child_parent[0],"r");
+    pipeinfo->write = parent_child[1];
+    pipeinfo->read = child_parent[0];
     return 0;
 }
 

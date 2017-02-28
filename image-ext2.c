@@ -50,7 +50,16 @@ void split_path_file(char** p, char** f, const char *pf) {
     *f = strdup(slash);
 }
 
-static int readuntil(struct image *image, FILE *stream, char *expected) {
+static int readuntil(struct image *image, int stream, char *expected) {
+    char buf[1000];
+    int numchars;
+    do {
+        numchars = read(stream, buf, 1000);
+        buf[numchars] = '\0';
+        image_log(image, 1, "from debugfs[%d]: %s", numchars, buf);
+    } while (strstr(buf,expected) == NULL);
+
+/*
     char *p;
     char ch;
     p = expected;
@@ -74,6 +83,7 @@ static int readuntil(struct image *image, FILE *stream, char *expected) {
     }
     *bufp='\0';
     image_log(image, 1, "%s", buf);
+*/
     return 0;
 }
 
@@ -87,7 +97,7 @@ static int verify_directory_exists(struct bdpipe *debugfspipe, char *dirpath, st
            tmp = strndup(dirpath, p-dirpath);
            image_log(image, 1, "debugfs[%s]: mkdir %s\n",
                             imageoutfile(image), tmp);
-           ret = fprintf(debugfspipe->write, "mkdir %s\n",tmp);
+           ret = dprintf(debugfspipe->write, "mkdir %s\n",tmp);
            readuntil(image, debugfspipe->read, DEBUGFS_PROMPT);
         }
         p++;
@@ -165,11 +175,11 @@ static int add_directory(const char *dirpath, struct image *image, struct image 
 
             image_log(image, 1, "debugfs[%s]: cd %s\n",
                             imageoutfile(image), target_path);
-            ret = fprintf(debugfspipe->write, "cd %s\n", target_path);
+            ret = dprintf(debugfspipe->write, "cd %s\n", target_path);
             readuntil(image,debugfspipe->read,DEBUGFS_PROMPT);
             image_log(image, 1, "debugfs[%s]: write %s %s\n",
                             imageoutfile(image), filepath, target_file);
-            ret = fprintf(debugfspipe->write, "write %s %s\n",
+            ret = dprintf(debugfspipe->write, "write %s %s\n",
                             filepath, target_file);
             readuntil(image,debugfspipe->read,DEBUGFS_PROMPT);
             printf(" %s\n", filepath);
@@ -199,7 +209,7 @@ static int add_directory(const char *dirpath, struct image *image, struct image 
     if (result >= 0)
         errno = result;
 
-    fprintf(debugfspipe->write, "quit\n");
+    dprintf(debugfspipe->write, "quit\n");
     readuntil(image,debugfspipe->read,DEBUGFS_PROMPT);
 
     return errno;
