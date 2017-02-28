@@ -52,12 +52,16 @@ void split_path_file(char** p, char** f, const char *pf) {
 
 static int readuntil(struct image *image, int stream, char *expected) {
     char buf[1000];
+    char line[1000] = {'\0'};
     int numchars;
+    int totalchars = 0;
     do {
         numchars = read(stream, buf, 1000);
         buf[numchars] = '\0';
-        image_log(image, 1, "from debugfs[%d]: %s", numchars, buf);
-    } while (strstr(buf,expected) == NULL);
+        strcat(line,buf);
+        totalchars += numchars;
+    } while (strstr(line,expected) == NULL);
+    image_log(image, 1, "from debugfs[%d]: %s\n", totalchars, line);
 
 /*
     char *p;
@@ -157,6 +161,14 @@ static int add_directory(const char *dirpath, struct image *image, struct image 
             printf("WARNING: NOT adding %s (dangling symlink)\n", filepath);
         else
         if (typeflag == FTW_F) {
+            struct stat sb;
+            stat(filepath, &sb);
+            if (!S_ISREG(sb.st_mode)) {
+                image_log(image, 1, "debugfs[%s]: NONREGULAR FILE UNHANDLED %s\n",
+                                imageoutfile(image), filepath);
+                return 0;
+            }
+
             char *target_path;
             char *target_file;
 
@@ -210,7 +222,7 @@ static int add_directory(const char *dirpath, struct image *image, struct image 
         errno = result;
 
     dprintf(debugfspipe->write, "quit\n");
-    readuntil(image,debugfspipe->read,DEBUGFS_PROMPT);
+    //readuntil(image,debugfspipe->read,DEBUGFS_PROMPT);
 
     return errno;
 }
@@ -295,22 +307,21 @@ static int ext2_generate(struct image *image)
 static int ext2_parse(struct image *image, cfg_t *cfg)
 {
 	unsigned int i;
-	unsigned int num_files;
 	struct partition *part;
 
-	num_files = cfg_size(cfg, "file");
-	for (i = 0; i < num_files; i++) {
+	for(i = 0; i < cfg_size(cfg, "files"); i++) {
+		cfg_t *filessec = cfg_getnsec(cfg, "files", i);
+		part = xzalloc(sizeof *part);
+		part->name = cfg_title(filessec);
+		part->image = cfg_getstr(filessec, "source");
+		list_add_tail(&part->list, &image->partitions);
+	}
+
+	for (i = 0; i < cfg_size(cfg, "file"); i++) {
 		cfg_t *filesec = cfg_getnsec(cfg, "file", i);
 		part = xzalloc(sizeof *part);
 		part->name = cfg_title(filesec);
 		part->image = cfg_getstr(filesec, "image");
-		list_add_tail(&part->list, &image->partitions);
-	}
-
-	for(i = 0; i < cfg_size(cfg, "files"); i++) {
-		part = xzalloc(sizeof *part);
-		part->image = cfg_getnstr(cfg, "files", i);
-		part->name = "";
 		list_add_tail(&part->list, &image->partitions);
 	}
 
@@ -323,11 +334,17 @@ static cfg_opt_t file_opts[] = {
 	CFG_END()
 };
 
+static cfg_opt_t files_opts[] = {
+	CFG_STR("source", NULL, CFGF_MULTI),
+	CFG_END()
+};
+
+
 static cfg_opt_t ext2_opts[] = {
 	CFG_STR("extraargs", "", CFGF_NONE),
 	CFG_STR("features", 0, CFGF_NONE),
 	CFG_STR("label", 0, CFGF_NONE),
-	CFG_STR_LIST("files", 0, CFGF_NONE),
+	CFG_SEC("files", files_opts, CFGF_MULTI | CFGF_TITLE),
 	CFG_SEC("file", file_opts, CFGF_MULTI | CFGF_TITLE),
 	CFG_END()
 };
@@ -343,7 +360,7 @@ static cfg_opt_t ext3_opts[] = {
 	CFG_STR("extraargs", "", CFGF_NONE),
 	CFG_STR("features", "has_journal", CFGF_NONE),
 	CFG_STR("label", 0, CFGF_NONE),
-	CFG_STR_LIST("files", 0, CFGF_NONE),
+	CFG_SEC("files", files_opts, CFGF_MULTI | CFGF_TITLE),
 	CFG_SEC("file", file_opts, CFGF_MULTI | CFGF_TITLE),
 	CFG_END()
 };
@@ -359,7 +376,7 @@ static cfg_opt_t ext4_opts[] = {
 	CFG_STR("extraargs", "", CFGF_NONE),
 	CFG_STR("features", "extents,uninit_bg,dir_index,has_journal", CFGF_NONE),
 	CFG_STR("label", 0, CFGF_NONE),
-	CFG_STR_LIST("files", 0, CFGF_NONE),
+	CFG_SEC("files", files_opts, CFGF_MULTI | CFGF_TITLE),
 	CFG_SEC("file", file_opts, CFGF_MULTI | CFGF_TITLE),
 	CFG_END()
 };
