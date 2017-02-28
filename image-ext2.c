@@ -169,11 +169,15 @@ static int add_directory(const char *dirpath, struct image *image, struct image 
                 return 0;
             }
 
+            char target_filepath[1024];
             char *target_path;
             char *target_file;
 
+            strcpy(target_filepath,target);
+            strcat(target_filepath,filepath+strlen(dirpath));
+
             image_log(image, 1, "Adding file '%s' as '%s' ...\n",
-                            child->file, *target ? target : child->file);
+                            filepath, target_filepath);
 
             split_path_file(&target_path, &target_file, filepath);
 
