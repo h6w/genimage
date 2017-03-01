@@ -21,6 +21,7 @@
 #include <errno.h>
 #include <unistd.h>
 #include <ftw.h>
+#include <stdbool.h>
 
 /* POSIX.1 says each process has at least 20 file descriptors.
  * Three of those belong to the standard streams.
@@ -50,18 +51,18 @@ void split_path_file(char** p, char** f, const char *pf) {
     *f = strdup(slash);
 }
 
-static int readuntil(struct image *image, int stream, char *expected) {
-    char buf[1000];
-    char line[1000] = {'\0'};
+static int readuntil(struct image *image, int stream, char *expected, char *response) {
+    char buf[1024];
     int numchars;
     int totalchars = 0;
+    response[0] = '\0';
     do {
-        numchars = read(stream, buf, 1000);
+        numchars = read(stream, buf, 1024);
         buf[numchars] = '\0';
-        strcat(line,buf);
+        strcat(response,buf);
         totalchars += numchars;
-    } while (strstr(line,expected) == NULL);
-    image_log(image, 1, "from debugfs[%d]: %s\n", totalchars, line);
+    } while (strstr(response,expected) == NULL);
+    image_log(image, 1, "from debugfs[%d]: %s\n", totalchars, response);
 
 /*
     char *p;
@@ -95,14 +96,27 @@ static int verify_directory_exists(struct bdpipe *debugfspipe, char *dirpath, st
     char *p;
     char *tmp;
     int ret = 0;
-    p = dirpath;
+    p = dirpath+strlen(dirpath);
+    bool pathok = false;
+    char response[1024];
+    while (p > dirpath && !pathok) {
+        if (*p == '/' && p-dirpath > 0) {
+            tmp = strndup(dirpath, p-dirpath);
+            image_log(image, 1, "debugfs[%s]: cd %s\n",
+                            imageoutfile(image), tmp);
+            ret = dprintf(debugfspipe->write, "cd %s\n",tmp);
+            readuntil(image, debugfspipe->read, DEBUGFS_PROMPT,response);
+            if (strstr(response,"not found") == NULL) pathok = true;
+        }
+        p--;
+    }
     while (*p != '\0') {
         if (*p == '/' && p-dirpath > 0) {
            tmp = strndup(dirpath, p-dirpath);
            image_log(image, 1, "debugfs[%s]: mkdir %s\n",
                             imageoutfile(image), tmp);
            ret = dprintf(debugfspipe->write, "mkdir %s\n",tmp);
-           readuntil(image, debugfspipe->read, DEBUGFS_PROMPT);
+           readuntil(image, debugfspipe->read, DEBUGFS_PROMPT,response);
         }
         p++;
     }
@@ -113,13 +127,14 @@ static int add_directory(const char *dirpath, struct image *image, struct image 
 {
     int result;
     struct bdpipe *debugfspipe;
+    char response[1024];
 
     image_log(image, 1, "Opening connection to debugfs[%s]...",
                             imageoutfile(image));
     debugfspipe = popenbdp(image, "w", "%s -w %s",
                       get_opt("debugfs"), imageoutfile(image));
     image_log(image, 1, "open\n");
-    readuntil(image,debugfspipe->read,DEBUGFS_PROMPT);
+    readuntil(image,debugfspipe->read,DEBUGFS_PROMPT,response);
 
     int add_file(const char *filepath, const struct stat *info,
                     const int typeflag, struct FTW *pathinfo)
@@ -186,6 +201,7 @@ static int add_directory(const char *dirpath, struct image *image, struct image 
 
             verify_directory_exists(debugfspipe, target_path, image);
 
+/*
             image_log(image, 1, "debugfs[%s]:Parent directory %s exists\n",
                                 imageoutfile(image), target_path);
 
@@ -193,12 +209,13 @@ static int add_directory(const char *dirpath, struct image *image, struct image 
                             imageoutfile(image), target_path);
             ret = dprintf(debugfspipe->write, "cd %s\n", target_path);
             readuntil(image,debugfspipe->read,DEBUGFS_PROMPT);
+*/
             image_log(image, 1, "debugfs[%s]: write %s %s\n",
                             imageoutfile(image), filepath, target_file);
             ret = dprintf(debugfspipe->write, "write %s %s\n",
                             filepath, target_file);
-            readuntil(image,debugfspipe->read,DEBUGFS_PROMPT);
-            printf(" %s\n", filepath);
+            readuntil(image,debugfspipe->read,DEBUGFS_PROMPT,response);
+//            printf(" %s\n", filepath);
             ret = 0;
         } else if (typeflag == FTW_D || typeflag == FTW_DP) {
             image_log(image, 1, "debugfs[%s]: DIRECTORY UNHANDLED %s\n",
