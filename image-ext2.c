@@ -52,33 +52,34 @@ void split_path_file(char** p, char** f, const char *pf) {
 }
 
 static int readuntil(struct image *image, int stream, char *expected, char *response) {
+/*
     char buf[1024];
     int numchars;
-    int totalchars = 0;
+    int totalchars = 0, prevtotalchars = 0;
     response[0] = '\0';
     do {
-        numchars = read(stream, buf, 1024);
-        buf[numchars] = '\0';
-        strcat(response,buf);
-        totalchars += numchars;
-    } while (strstr(response,expected) == NULL);
+        prevtotalchars = totalchars;
+        usleep(100);
+        do {
+            numchars = read(stream, buf, 1024);
+            buf[numchars] = '\0';
+            strcat(response,buf);
+            totalchars += numchars;
+        } while (strstr(response,expected) == NULL);
+    } while (prevtotalchars != totalchars);
     image_log(image, 1, "from debugfs[%d]: %s\n", totalchars, response);
+*/
 
-/*
     char *p;
     char ch;
+    char buf[1];
     p = expected;
-    char buf[255];
-    char *bufp = buf;
+    char *bufp = response;
     while(*p != '\0') {
-        ch = fgetc(stream);
+        read(stream, buf, 1);
+        ch = buf[0];
         *bufp = ch;
         bufp++;
-        if (ch == '\n') {
-            *bufp='\0';
-            image_log(image, 1, "%s", buf);
-            bufp=buf;
-        }
         if (*p == ch) p++;
         else p = expected;
     }
@@ -87,8 +88,10 @@ static int readuntil(struct image *image, int stream, char *expected, char *resp
         bufp++;
     }
     *bufp='\0';
-    image_log(image, 1, "%s", buf);
-*/
+    image_log(image, 1, " <-- debugfs[%ld]: %s\n", (bufp-response), response);
+
+    return 0;
+
     return 0;
 }
 
@@ -96,29 +99,36 @@ static int verify_directory_exists(struct bdpipe *debugfspipe, char *dirpath, st
     char *p;
     char *tmp;
     int ret = 0;
-    p = dirpath+strlen(dirpath);
+    p = dirpath+strlen(dirpath)+1;
     bool pathok = false;
     char response[1024];
+    char action[1024];
     while (p > dirpath && !pathok) {
         if (*p == '/' && p-dirpath > 0) {
             tmp = strndup(dirpath, p-dirpath);
-            image_log(image, 1, "debugfs[%s]: cd %s\n",
-                            imageoutfile(image), tmp);
-            ret = dprintf(debugfspipe->write, "cd %s\n",tmp);
+            sprintf(action,"cd %s\n", tmp);
+            image_log(image, 1, " --> debugfs[%s]: %s",
+                            imageoutfile(image), action);
+            ret = write(debugfspipe->write, action, strlen(action));
+            readuntil(image, debugfspipe->read, action, response);
             readuntil(image, debugfspipe->read, DEBUGFS_PROMPT,response);
             if (strstr(response,"not found") == NULL) pathok = true;
+            free(tmp);
         }
-        p--;
+        if (!pathok) p--;
     }
-    while (*p != '\0') {
-        if (*p == '/' && p-dirpath > 0) {
-           tmp = strndup(dirpath, p-dirpath);
-           image_log(image, 1, "debugfs[%s]: mkdir %s\n",
-                            imageoutfile(image), tmp);
-           ret = dprintf(debugfspipe->write, "mkdir %s\n",tmp);
-           readuntil(image, debugfspipe->read, DEBUGFS_PROMPT,response);
-        }
+    while (*p != '\0' && !(*p == '/' && *(p+1) == '\0')) {
         p++;
+        if ((*p == '/' && p-dirpath > 0)) {
+            tmp = strndup(dirpath, p-dirpath);
+            sprintf(action,"mkdir %s\n", tmp);
+            image_log(image, 1, " --> debugfs[%s]: %s",
+                             imageoutfile(image), action);
+            ret = write(debugfspipe->write, action, strlen(action));
+            readuntil(image, debugfspipe->read, action, response);
+            readuntil(image, debugfspipe->read, DEBUGFS_PROMPT,response);
+            free(tmp);
+        }
     }
     return ret;
 }
@@ -128,6 +138,7 @@ static int add_directory(const char *dirpath, struct image *image, struct image 
     int result;
     struct bdpipe *debugfspipe;
     char response[1024];
+    char action[1024];
 
     image_log(image, 1, "Opening connection to debugfs[%s]...",
                             imageoutfile(image));
@@ -179,7 +190,7 @@ static int add_directory(const char *dirpath, struct image *image, struct image 
             struct stat sb;
             stat(filepath, &sb);
             if (!S_ISREG(sb.st_mode)) {
-                image_log(image, 1, "debugfs[%s]: NONREGULAR FILE UNHANDLED %s\n",
+                image_log(image, 1, " !!! debugfs[%s]: NONREGULAR FILE UNHANDLED %s\n",
                                 imageoutfile(image), filepath);
                 return 0;
             }
@@ -196,8 +207,7 @@ static int add_directory(const char *dirpath, struct image *image, struct image 
 
             split_path_file(&target_path, &target_file, target_filepath);
 
-            image_log(image, 1, "debugfs[%s]:Verifying parent directory %s...\n",
-                                imageoutfile(image), target_path);
+            image_log(image, 1, "Verifying parent directory %s...\n", target_path);
 
             verify_directory_exists(debugfspipe, target_path, image);
 
@@ -210,15 +220,16 @@ static int add_directory(const char *dirpath, struct image *image, struct image 
             ret = dprintf(debugfspipe->write, "cd %s\n", target_path);
             readuntil(image,debugfspipe->read,DEBUGFS_PROMPT);
 */
-            image_log(image, 1, "debugfs[%s]: write %s %s\n",
-                            imageoutfile(image), filepath, target_file);
-            ret = dprintf(debugfspipe->write, "write %s %s\n",
-                            filepath, target_file);
-            readuntil(image,debugfspipe->read,DEBUGFS_PROMPT,response);
+            sprintf(action,"write %s %s\n", filepath, target_file);
+            image_log(image, 1, " --> debugfs[%s]: %s",
+                            imageoutfile(image), action);
+            ret = write(debugfspipe->write, action, strlen(action));
+            readuntil(image, debugfspipe->read, action, response);
+            readuntil(image, debugfspipe->read, DEBUGFS_PROMPT,response);
 //            printf(" %s\n", filepath);
             ret = 0;
         } else if (typeflag == FTW_D || typeflag == FTW_DP) {
-            image_log(image, 1, "debugfs[%s]: DIRECTORY UNHANDLED %s\n",
+            image_log(image, 1, " !!! debugfs[%s]: DIRECTORY UNHANDLED %s\n",
                             imageoutfile(image), filepath);
             ret = 0;
         } else if (typeflag == FTW_DNR) {
@@ -292,16 +303,6 @@ static int ext2_generate(struct image *image)
 
 	        image_log(image, 1, "Entry: File:%s Target:%s Path:%s Next:%s\n",
 			file, target, path, next);
-
-            while ((next = strchr(next, '/')) != NULL) {
-	                image_log(image, 1, "Next:%s\n", next);
-                    *next = '\0';
-                    systemp(image, "%s -DsS -i %s ::%s",
-                            get_opt("mkdir"), imageoutfile(image), path);
-                    *next = '/';
-                    ++next;
-            }
-	        image_log(image, 1, "Parent directory exists\n");
 
             struct stat fileinfo;
             if (stat(file, &fileinfo) != 0)

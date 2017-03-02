@@ -159,6 +159,7 @@ int popenbd(const char *cmdline, struct bdpipe *pipeinfo) {
         close(child_parent[0]);     //Close the read end of the child->parent pipe, because we're not listening to the parent.
         dup2(parent_child[0], 0);   //Replace our stdin (0) with the readable end of the parent->child pipe
         dup2(child_parent[1], 1);   //Replace our stdout (1) to the writable end of the child->parent pipe
+        dup2(child_parent[1], 2);   //Replace our stderr (1) to the writable end of the child->parent pipe
         execl("/bin/sh", "sh", "-c", cmdline, (char *)0);
         perror("execl"); exit(99);
     }
