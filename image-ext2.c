@@ -72,9 +72,10 @@ static int readuntil(struct image *image, int stream, char *expected, char *resp
 
     char *p;
     char ch;
-    char buf[1];
+    char buf[2];
     p = expected;
-    char *bufp = response;
+    char *bufp;
+    bufp = response;
     while(*p != '\0') {
         read(stream, buf, 1);
         ch = buf[0];
@@ -88,9 +89,7 @@ static int readuntil(struct image *image, int stream, char *expected, char *resp
         bufp++;
     }
     *bufp='\0';
-    image_log(image, 1, " <-- debugfs[%ld]: %s\n", (bufp-response), response);
-
-    return 0;
+    image_log(image, 1, " <-- debugfs[%ld]: %s", (bufp-response), response);
 
     return 0;
 }
