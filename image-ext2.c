@@ -76,20 +76,38 @@ static int readuntil(struct image *image, int stream, char *expected, char *resp
     p = expected;
     char *bufp;
     bufp = response;
+    int i = 0;
+
     while(*p != '\0') {
         read(stream, buf, 1);
         ch = buf[0];
+        //fprintf(stderr,"[%d]%c**%d\n",i,ch,(int)ch);
+        if (bufp-response > 1 && (int)ch == 13 && (int)(*(bufp-1)) == 32) {
+            if (p > expected && *p == *(bufp-2)) p--;
+            bufp -= 1;
+            //fprintf(stderr,"Back 2\n");
+            continue;
+        }
+        //fprintf(stderr,"%c",ch);
+        //fflush(stderr);
         *bufp = ch;
-        bufp++;
-        if (*p == ch) p++;
+        //fprintf(stderr,"[%c%c] [%c%c]\n", *p, *(p+1), *(bufp-2), *(bufp-1));
+        if (bufp-response > 1 && *p == *(bufp-2)) p++;
         else p = expected;
+        if (*p == *(bufp-1) && *(p+1) == '\0') {
+            *bufp='\0';
+            image_log(image, 1, " <-- debugfs[%ld]: %s\n", (bufp-response), response);
+            return 0;
+        }
+        bufp++;
+        i++;
     }
     if (*p == '\0') {
         *bufp = '\n';
         bufp++;
     }
     *bufp='\0';
-    image_log(image, 1, " <-- debugfs[%ld]: %s", (bufp-response), response);
+    image_log(image, 1, " <-- debugfs[%ld]: %s\n", (bufp-response), response);
 
     return 0;
 }
@@ -105,10 +123,11 @@ static int verify_directory_exists(struct bdpipe *debugfspipe, char *dirpath, st
     while (p > dirpath && !pathok) {
         if (*p == '/' && p-dirpath > 0) {
             tmp = strndup(dirpath, p-dirpath);
-            sprintf(action,"cd %s\n", tmp);
-            image_log(image, 1, " --> debugfs[%s]: %s",
+            sprintf(action,"cd %s", tmp);
+            image_log(image, 1, " --> debugfs[%s]: %s\n",
                             imageoutfile(image), action);
             ret = write(debugfspipe->write, action, strlen(action));
+            ret = write(debugfspipe->write, "\n", 1);
             readuntil(image, debugfspipe->read, action, response);
             readuntil(image, debugfspipe->read, DEBUGFS_PROMPT,response);
             if (strstr(response,"not found") == NULL) pathok = true;
@@ -120,10 +139,11 @@ static int verify_directory_exists(struct bdpipe *debugfspipe, char *dirpath, st
         p++;
         if ((*p == '/' && p-dirpath > 0)) {
             tmp = strndup(dirpath, p-dirpath);
-            sprintf(action,"mkdir %s\n", tmp);
-            image_log(image, 1, " --> debugfs[%s]: %s",
+            sprintf(action,"mkdir %s", tmp);
+            image_log(image, 1, " --> debugfs[%s]: %s\n",
                              imageoutfile(image), action);
             ret = write(debugfspipe->write, action, strlen(action));
+            ret = write(debugfspipe->write, "\n", 1);
             readuntil(image, debugfspipe->read, action, response);
             readuntil(image, debugfspipe->read, DEBUGFS_PROMPT,response);
             free(tmp);
@@ -219,10 +239,11 @@ static int add_directory(const char *dirpath, struct image *image, struct image 
             ret = dprintf(debugfspipe->write, "cd %s\n", target_path);
             readuntil(image,debugfspipe->read,DEBUGFS_PROMPT);
 */
-            sprintf(action,"write %s %s\n", filepath, target_file);
-            image_log(image, 1, " --> debugfs[%s]: %s",
+            sprintf(action,"write %s %s", filepath, target_file);
+            image_log(image, 1, " --> debugfs[%s]: %s\n",
                             imageoutfile(image), action);
             ret = write(debugfspipe->write, action, strlen(action));
+            ret = write(debugfspipe->write, "\n", 1);
             readuntil(image, debugfspipe->read, action, response);
             readuntil(image, debugfspipe->read, DEBUGFS_PROMPT,response);
 //            printf(" %s\n", filepath);
