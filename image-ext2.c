@@ -152,24 +152,16 @@ static int verify_directory_exists(struct bdpipe *debugfspipe, char *dirpath, st
     return ret;
 }
 
-static int add_directory(const char *dirpath, struct image *image, struct image *child, const char *target, const char *file)
+static int add_directory(struct bdpipe * debugfspipe, const char *dirpath, struct image *image, struct image *child, const char *target, const char *file)
 {
     int result;
-    struct bdpipe *debugfspipe;
-    char response[1024];
-    char action[1024];
-
-    image_log(image, 1, "Opening connection to debugfs[%s]...",
-                            imageoutfile(image));
-    debugfspipe = popenbdp(image, "w", "%s -w %s",
-                      get_opt("debugfs"), imageoutfile(image));
-    image_log(image, 1, "open\n");
-    readuntil(image,debugfspipe->read,DEBUGFS_PROMPT,response);
 
     int add_file(const char *filepath, const struct stat *info,
                     const int typeflag, struct FTW *pathinfo)
     {
         int ret = 0;
+        char response[1024];
+        char action[1024];
 
         if (typeflag == FTW_SL) {
             char   *file_target;
@@ -249,8 +241,9 @@ static int add_directory(const char *dirpath, struct image *image, struct image 
 //            printf(" %s\n", filepath);
             ret = 0;
         } else if (typeflag == FTW_D || typeflag == FTW_DP) {
-            image_log(image, 1, " !!! debugfs[%s]: DIRECTORY UNHANDLED %s\n",
+            image_log(image, 1, " debugfs[%s]: Adding directory from file structure %s\n",
                             imageoutfile(image), filepath);
+            add_directory(debugfspipe, dirpath, image, child, target, file);
             ret = 0;
         } else if (typeflag == FTW_DNR) {
             printf("WARNING: NOT adding %s/ (unreadable)\n", filepath);
@@ -273,11 +266,29 @@ static int add_directory(const char *dirpath, struct image *image, struct image 
     if (result >= 0)
         errno = result;
 
+    return errno;
+}
+
+static int open_and_add_directory(const char *dirpath, struct image *image, struct image *child, const char *target, const char *file)
+{
+    struct bdpipe *debugfspipe;
+    char response[1024];
+
+    image_log(image, 1, "Opening connection to debugfs[%s]...",
+                            imageoutfile(image));
+    debugfspipe = popenbdp(image, "w", "%s -w %s",
+                      get_opt("debugfs"), imageoutfile(image));
+    image_log(image, 1, "open\n");
+    readuntil(image,debugfspipe->read,DEBUGFS_PROMPT,response);
+
+    add_directory(debugfspipe, dirpath, image, child, target, file);
+
     dprintf(debugfspipe->write, "quit\n");
     //readuntil(image,debugfspipe->read,DEBUGFS_PROMPT);
 
-    return errno;
+    return 0;
 }
+
 
 static int ext2_generate(struct image *image)
 {
@@ -329,7 +340,7 @@ static int ext2_generate(struct image *image)
 	            image_log(image, 1, "Stat failed.\n");
             if (S_ISDIR(fileinfo.st_mode)) {
 	            image_log(image, 1, "It's a directory.\n");
-                add_directory(file,image,child,target,file);
+                open_and_add_directory(file,image,child,target,file);
             } else {
 	            image_log(image, 1, "It's a file.\n");
             }
