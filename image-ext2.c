@@ -112,8 +112,8 @@ static int readuntil(struct image *image, int stream, char *expected, char *resp
     return 0;
 }
 
-static int verify_directory_exists(struct bdpipe *debugfspipe, char *dirpath, struct image *image) {
-    char *p;
+static int verify_directory_exists(struct bdpipe *debugfspipe, const char *dirpath, struct image *image) {
+    const char *p;
     char *tmp;
     int ret = 0;
     p = dirpath+strlen(dirpath)+1;
@@ -241,9 +241,11 @@ static int add_directory(struct bdpipe * debugfspipe, const char *dirpath, struc
 //            printf(" %s\n", filepath);
             ret = 0;
         } else if (typeflag == FTW_D || typeflag == FTW_DP) {
-            image_log(image, 1, " debugfs[%s]: Adding directory from file structure %s\n",
-                            imageoutfile(image), filepath);
-            add_directory(debugfspipe, dirpath, image, child, target, file);
+            image_log(image, 1, " --- debugfs[%s]: Adding directory from file structure %s to %s\n",
+                            imageoutfile(image), filepath, target);
+
+            verify_directory_exists(debugfspipe, target, image);
+
             ret = 0;
         } else if (typeflag == FTW_DNR) {
             printf("WARNING: NOT adding %s/ (unreadable)\n", filepath);
@@ -368,6 +370,13 @@ static int ext2_parse(struct image *image, cfg_t *cfg)
 		part->name = cfg_title(filessec);
 		part->image = cfg_getstr(filessec, "source");
 		list_add_tail(&part->list, &image->partitions);
+
+        for(i = 0; i < cfg_size(filessec, "sources"); i++) {
+            part = xzalloc(sizeof *part);
+            part->name = cfg_title(filessec);
+            part->image = cfg_getnstr(filessec, "sources", i);
+            list_add_tail(&part->list, &image->partitions);
+        }
 	}
 
 	for (i = 0; i < cfg_size(cfg, "file"); i++) {
@@ -389,6 +398,7 @@ static cfg_opt_t file_opts[] = {
 
 static cfg_opt_t files_opts[] = {
 	CFG_STR("source", NULL, CFGF_MULTI),
+	CFG_STR_LIST("sources", 0, CFGF_NONE),
 	CFG_END()
 };
 
@@ -405,7 +415,7 @@ static cfg_opt_t ext2_opts[] = {
 struct image_handler ext2_handler = {
 	.type = "ext2",
 	.generate = ext2_generate,
-  .parse = ext2_parse,
+    .parse = ext2_parse,
 	.opts = ext2_opts,
 };
 
