@@ -200,13 +200,14 @@ static int add_directory(struct bdpipe * debugfspipe, const char *dirpath, struc
 
         } else
         if (typeflag == FTW_SLN)
-            printf("WARNING: NOT adding %s (dangling symlink)\n", filepath);
+            image_log(image, 1, " !!! debugfs[%s]: WARNING: NOT adding %s (dangling symlink)\n",
+                            imageoutfile(image), filepath);
         else
         if (typeflag == FTW_F) {
             struct stat sb;
             stat(filepath, &sb);
             if (!S_ISREG(sb.st_mode)) {
-                image_log(image, 1, " !!! debugfs[%s]: NONREGULAR FILE UNHANDLED %s\n",
+                image_log(image, 1, " !!! debugfs[%s]: WARNING: NONREGULAR FILE UNHANDLED %s\n",
                                 imageoutfile(image), filepath);
                 return 0;
             }
@@ -262,10 +263,12 @@ static int add_directory(struct bdpipe * debugfspipe, const char *dirpath, struc
 
             ret = 0;
         } else if (typeflag == FTW_DNR) {
-            printf("WARNING: NOT adding %s/ (unreadable)\n", filepath);
+            image_log(image, 1, " !!! debugfs[%s]: WARNING: NOT adding %s/ (unreadable)\n",
+                            imageoutfile(image), filepath);
             ret = 0;
         } else {
-            printf("WARNING: NOT adding %s (unknown)\n", filepath);
+            image_log(image, 1, " !!! debugfs[%s]: WARNING: NOT adding %s (unknown)\n\n",
+                            imageoutfile(image), filepath);
             ret = 0;
         }
 
