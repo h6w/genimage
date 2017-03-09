@@ -47,6 +47,7 @@ void split_path_file(char** p, char** f, const char *pf) {
     const char *slash = pf, *next;
     while ((next = strpbrk(slash + 1, "\\/"))) slash = next;
     if (pf != slash) slash++;
+    if (*slash == '/') slash++;
     *p = strndup(pf, slash - pf);
     *f = strdup(slash);
 }
@@ -113,16 +114,20 @@ static int readuntil(struct image *image, int stream, char *expected, char *resp
 }
 
 static int verify_directory_exists(struct bdpipe *debugfspipe, const char *dirpath, struct image *image) {
+    //image_log(image, 1, " dirpath: %s\n", dirpath);
     const char *p;
     char *tmp;
     int ret = 0;
-    p = dirpath+strlen(dirpath)+1;
+    p = dirpath+strlen(dirpath)-1;
     bool pathok = false;
     char response[1024];
     char action[1024];
-    while (p > dirpath && !pathok) {
-        if (*p == '/' && p-dirpath > 0) {
-            tmp = strndup(dirpath, p-dirpath);
+    //image_log(image, 1, " dirpath: %s\n", dirpath);
+    //image_log(image, 1, " dirpath: %s p: %s diff: %d\n", dirpath, p, p-dirpath);
+    while (p >= dirpath && !pathok) {
+        //image_log(image, 1, " dirpath: %s p: %s diff: %d\n", dirpath, p, p-dirpath);
+        if (*p == '/' && p-dirpath >= 0) {
+            tmp = strndup(dirpath, p-dirpath+1);
             sprintf(action,"cd %s", tmp);
             image_log(image, 1, " --> debugfs[%s]: %s\n",
                             imageoutfile(image), action);
@@ -241,10 +246,19 @@ static int add_directory(struct bdpipe * debugfspipe, const char *dirpath, struc
 //            printf(" %s\n", filepath);
             ret = 0;
         } else if (typeflag == FTW_D || typeflag == FTW_DP) {
-            image_log(image, 1, " --- debugfs[%s]: Adding directory from file structure %s to %s\n",
-                            imageoutfile(image), filepath, target);
+            char new_filepath[1024];
+            strcpy(new_filepath,filepath);
+            strcat(new_filepath,"/");
 
-            verify_directory_exists(debugfspipe, target, image);
+            char target_filepath[1024];
+
+            strcpy(target_filepath,target);
+            strcat(target_filepath,new_filepath+strlen(dirpath));
+
+            image_log(image, 1, " --- debugfs[%s]: Adding directory from file structure %s to %s\n",
+                            imageoutfile(image), new_filepath, target_filepath);
+
+            verify_directory_exists(debugfspipe, target_filepath, image);
 
             ret = 0;
         } else if (typeflag == FTW_DNR) {
@@ -361,20 +375,25 @@ static int ext2_generate(struct image *image)
 
 static int ext2_parse(struct image *image, cfg_t *cfg)
 {
-	unsigned int i;
+	unsigned int i, j;
 	struct partition *part;
 
 	for(i = 0; i < cfg_size(cfg, "files"); i++) {
-		cfg_t *filessec = cfg_getnsec(cfg, "files", i);
-		part = xzalloc(sizeof *part);
-		part->name = cfg_title(filessec);
-		part->image = cfg_getstr(filessec, "source");
-		list_add_tail(&part->list, &image->partitions);
 
-        for(i = 0; i < cfg_size(filessec, "sources"); i++) {
+		cfg_t *filessec = cfg_getnsec(cfg, "files", i);
+        if (cfg_getstr(filessec, "source") != NULL) {
+	            part = xzalloc(sizeof *part);
+	            part->name = cfg_title(filessec);
+	            part->image = cfg_getstr(filessec, "source");
+	            list_add_tail(&part->list, &image->partitions);
+        }
+
+        unsigned int num_sources = 0;
+		num_sources = cfg_size(filessec,"sources");
+        for(j = 0; j < num_sources; j++) {
             part = xzalloc(sizeof *part);
             part->name = cfg_title(filessec);
-            part->image = cfg_getnstr(filessec, "sources", i);
+            part->image = cfg_getnstr(filessec, "sources", j);
             list_add_tail(&part->list, &image->partitions);
         }
 	}
@@ -397,7 +416,7 @@ static cfg_opt_t file_opts[] = {
 };
 
 static cfg_opt_t files_opts[] = {
-	CFG_STR("source", NULL, CFGF_MULTI),
+	CFG_STR("source", NULL, CFGF_NONE),
 	CFG_STR_LIST("sources", 0, CFGF_NONE),
 	CFG_END()
 };
