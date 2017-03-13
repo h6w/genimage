@@ -195,8 +195,32 @@ static int add_directory(struct bdpipe * debugfspipe, const char *dirpath, struc
                 break;
             }
 
-            printf(" %s -> %s\n", filepath, file_target);
+            char target_filepath[1024];
+            char *target_path;
+            char *target_file;
+
+            strcpy(target_filepath,target);
+            strcat(target_filepath,filepath+strlen(dirpath));
+
+            split_path_file(&target_path, &target_file, target_filepath);
+
+            image_log(image, 1, "Linking file '%s' as '%s' ...\n",
+                            filepath, target_filepath);
+
+            image_log(image, 1, "Verifying parent directory %s...\n", target_path);
+
+            verify_directory_exists(debugfspipe, target_path, image);
+
+            sprintf(action,"ln %s %s", file_target, target_file);
+            image_log(image, 1, " --> debugfs[%s]: %s\n",
+                            imageoutfile(image), action);
+            ret = write(debugfspipe->write, action, strlen(action));
+            ret = write(debugfspipe->write, "\n", 1);
+            readuntil(image, debugfspipe->read, action, response);
+            readuntil(image, debugfspipe->read, DEBUGFS_PROMPT,response);
             free(file_target);
+
+            ret = 0;
 
         } else
         if (typeflag == FTW_SLN)
@@ -244,6 +268,23 @@ static int add_directory(struct bdpipe * debugfspipe, const char *dirpath, struc
             ret = write(debugfspipe->write, "\n", 1);
             readuntil(image, debugfspipe->read, action, response);
             readuntil(image, debugfspipe->read, DEBUGFS_PROMPT,response);
+            if (strstr(response,"already exists") != NULL) {
+                sprintf(action,"rm %s", target_file);
+                image_log(image, 1, " --> debugfs[%s]: %s\n",
+                                imageoutfile(image), action);
+                ret = write(debugfspipe->write, action, strlen(action));
+                ret = write(debugfspipe->write, "\n", 1);
+                readuntil(image, debugfspipe->read, action, response);
+                readuntil(image, debugfspipe->read, DEBUGFS_PROMPT,response);
+                sprintf(action,"write %s %s", filepath, target_file);
+                image_log(image, 1, " --> debugfs[%s]: %s\n",
+                                imageoutfile(image), action);
+                ret = write(debugfspipe->write, action, strlen(action));
+                ret = write(debugfspipe->write, "\n", 1);
+                readuntil(image, debugfspipe->read, action, response);
+                readuntil(image, debugfspipe->read, DEBUGFS_PROMPT,response);
+            }
+
 //            printf(" %s\n", filepath);
             ret = 0;
         } else if (typeflag == FTW_D || typeflag == FTW_DP) {
