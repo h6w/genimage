@@ -342,6 +342,11 @@ static struct config opts[] = {
 		.env = "GENIMAGE_DEBUGFS",
 		.def = "debugfs",
 	}, {
+		.name = "rsync",
+		.opt = CFG_STR("rsync", NULL, CFGF_NONE),
+		.env = "GENIMAGE_RSYNC",
+		.def = "rsync",
+	}, {
 		.name = "config",
 		.env = "GENIMAGE_CONFIG",
 		.def = "genimage.cfg",
