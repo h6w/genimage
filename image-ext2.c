@@ -67,9 +67,13 @@ static int ext2_generate(struct image *image)
         strcpy(target_filepath,mountpath(image));
         strcat(target_filepath,part->name);
 
-        ret = systemp(image, "%s %s %s",
+        image_log(image, 1, "%s -av %s %s\n",
 			get_opt("rsync"),
-			imageoutfile(image),
+		    file,
+			target_filepath);
+        ret = systemp(image, "%s -av %s %s",
+			get_opt("rsync"),
+			file,
 			target_filepath);
 
     }
