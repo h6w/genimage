@@ -1,6 +1,8 @@
 #ifndef __PTX_IMAGE_H
 #define __PTX_IMAGE_H
 
+#include <sys/types.h>
+#include <unistd.h>
 #include "list.h"
 
 struct image_handler;
